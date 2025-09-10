@@ -1,0 +1,361 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SwiftRail — Train Ticket Booking</title>
+  <style>
+    :root{
+      --accent:#0b7cff;
+      --muted:#6b7280;
+      --bg:#f5f7fb;
+      --card:#ffffff;
+      --success:#10b981;
+      --danger:#ef4444;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#0f172a;}
+    header{background:linear-gradient(90deg,var(--accent),#4f46e5);color:white;padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+    header h1{margin:0;font-size:20px;letter-spacing:0.4px}
+    header nav{display:flex;gap:12px}
+    header a{color:rgba(255,255,255,0.92);text-decoration:none;padding:8px 12px;border-radius:8px;font-weight:600}
+    .container{max-width:1100px;margin:28px auto;padding:0 16px}.grid{display:grid;grid-template-columns:1fr 420px;gap:20px}
+
+/* Search card */
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(12,17,35,0.06)}
+.field{display:flex;flex-direction:column;margin-bottom:12px}
+label{font-size:13px;color:var(--muted);margin-bottom:6px}
+input[type=text], input[type=date], select{padding:10px 12px;border-radius:8px;border:1px solid #e6edf8;font-size:14px}
+.row{display:flex;gap:10px}
+.row .field{flex:1}
+button.primary{background:var(--accent);color:white;border:none;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+button.secondary{background:transparent;border:1px solid #e6edf8;padding:9px 12px;border-radius:10px;cursor:pointer}
+
+/* Results */
+.results{margin-top:16px}
+.train-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:10px;border:1px solid #eef2ff;margin-bottom:10px}
+.train-meta{display:flex;gap:14px;align-items:center}
+.badge{background:#eef2ff;color:#3730a3;padding:6px 8px;border-radius:8px;font-weight:700}
+
+/* Seat map */\    
+.seat-map{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:12px}
+.seat{border-radius:8px;padding:10px;text-align:center;background:#f8fafc;border:1px solid #e6eefb;cursor:pointer;user-select:none}
+.seat.taken{background:#111827;color:white;cursor:not-allowed}
+.seat.selected{background:linear-gradient(90deg,var(--accent),#7c3aed);color:white}
+
+.summary{margin-top:12px}
+.summary p{margin:6px 0;color:var(--muted)}
+
+footer{text-align:center;color:var(--muted);padding:18px 8px}
+
+/* responsive */
+@media (max-width:980px){
+  .grid{grid-template-columns:1fr}
+  .seat-map{grid-template-columns:repeat(3,1fr)}
+}
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SwiftRail</h1>
+    <nav>
+      <a href="#">Book</a>
+      <a href="#">My Trips</a>
+      <a href="#">Support</a>
+    </nav>
+  </header>  <main class="container">
+    <div class="grid">
+      <section class="card">
+        <h2 style="margin:0 0 10px 0">Find trains & book tickets</h2>
+        <form id="searchForm">
+          <div class="row">
+            <div class="field">
+              <label for="from">From</label>
+              <input id="from" name="from" type="text" placeholder="City or station" required value="Mumbai">
+            </div>
+            <div class="field">
+              <label for="to">To</label>
+              <input id="to" name="to" type="text" placeholder="City or station" required value="Pune">
+            </div>
+          </div><div class="row">
+        <div class="field">
+          <label for="date">Travel date</label>
+          <input id="date" name="date" type="date" required>
+        </div>
+        <div class="field">
+          <label for="class">Class</label>
+          <select id="class" name="class">
+            <option>Second AC (2A)</option>
+            <option>Third AC (3A)</option>
+            <option>Sleeper (SL)</option>
+            <option>Chair Car (CC)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
+        <button class="primary" type="submit">Search trains</button>
+        <button class="secondary" id="randomFill" type="button">Random demo</button>
+        <div style="margin-left:auto;color:var(--muted)">Demo mode: local only</div>
+      </div>
+    </form>
+
+    <div class="results" id="results"></div>
+  </section>
+
+  <aside class="card">
+    <h3 style="margin-top:0">Select seats</h3>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Click to choose seats (max 6)</div>
+    <div class="seat-map" id="seatMap" aria-label="Seat map"></div>
+
+    <div class="summary">
+      <p><strong>Selected:</strong> <span id="selectedCount">0</span> seats</p>
+      <p><strong>Total:</strong> ₹<span id="totalPrice">0</span></p>
+      <button id="confirmBtn" class="primary" style="width:100%;margin-top:8px" disabled>Confirm & Pay</button>
+    </div>
+
+    <div style="margin-top:16px;font-size:13px;color:var(--muted)">
+      <p><strong>Notes:</strong></p>
+      <ul style="padding-left:18px;margin:6px 0">
+        <li>Demo doesn't contact any payment gateway.</li>
+        <li>Bookings are stored in your browser only (localStorage).</li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<!-- modal -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,0.45);align-items:center;justify-content:center">
+  <div style="background:white;border-radius:12px;padding:18px;max-width:560px;width:95%">
+    <h3 id="modalTitle">Confirm booking</h3>
+    <div id="modalBody" style="margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button id="payNow" class="primary">Pay now (demo)</button>
+      <button id="cancelModal" class="secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<section style="margin-top:20px" class="card">
+  <h3 style="margin:0 0 10px 0">Your demo bookings</h3>
+  <div id="bookingsList" style="color:var(--muted)">No bookings yet</div>
+</section>
+
+  </main>  <footer>
+    © SwiftRail · Demo train-booking UI — local-only · Built with HTML/CSS/JS
+  </footer>  <script>
+    // --- Mock train data ---
+    const mockTrains = [
+      { id: 'SWR101', name: 'Swift Express', depart: '08:30', arrive: '11:20', duration: '2h 50m', priceBase: 450 },
+      { id: 'SWR755', name: 'Coastal Link', depart: '13:10', arrive: '16:05', duration: '2h 55m', priceBase: 420 },
+      { id: 'SWR402', name: 'Night Rider', depart: '22:00', arrive: '00:50', duration: '2h 50m', priceBase: 480 }
+    ];
+
+    // --- State ---
+    const seatMapEl = document.getElementById('seatMap');
+    const selectedCountEl = document.getElementById('selectedCount');
+    const totalPriceEl = document.getElementById('totalPrice');
+    const resultsEl = document.getElementById('results');
+    const bookingsList = document.getElementById('bookingsList');
+
+    let seats = []; // will hold {id, row, col, taken, price}
+    let selected = new Set();
+    const MAX_SELECT = 6;
+
+    function buildSeatMap(){
+      seats = [];
+      seatMapEl.innerHTML = '';
+      const rows = 6; const cols = 6; // 36 seats for demo
+      for(let r=1;r<=rows;r++){
+        for(let c=1;c<=cols;c++){
+          const seatId = `R${r}C${c}`;
+          // random taken for demo
+          const taken = Math.random() < 0.15; // 15% already taken
+          const price = 150 + (r-1)*10; // slight row pricing
+          seats.push({id:seatId,row:r,col:c,taken,price});
+
+          const el = document.createElement('div');
+          el.className = 'seat' + (taken? ' taken':'');
+          el.textContent = seatId;
+          el.dataset.id = seatId;
+          el.title = taken ? 'Already booked' : `₹${price}`;
+          el.addEventListener('click', onSeatClicked);
+          seatMapEl.appendChild(el);
+        }
+      }
+      updateSummary();
+    }
+
+    function onSeatClicked(e){
+      const id = e.currentTarget.dataset.id;
+      const s = seats.find(x=>x.id===id);
+      if(!s || s.taken) return;
+      if(selected.has(id)){
+        selected.delete(id);
+        e.currentTarget.classList.remove('selected');
+      } else {
+        if(selected.size >= MAX_SELECT){
+          alert('Maximum ' + MAX_SELECT + ' seats allowed in demo');
+          return;
+        }
+        selected.add(id);
+        e.currentTarget.classList.add('selected');
+      }
+      updateSummary();
+    }
+
+    function updateSummary(){
+      let total = 0; let count = 0;
+      for(const id of selected){
+        const s = seats.find(x=>x.id===id);
+        if(s){total += s.price; count++;}
+      }
+      selectedCountEl.textContent = count;
+      totalPriceEl.textContent = total;
+      document.getElementById('confirmBtn').disabled = count===0;
+    }
+
+    // --- Search trains ---
+    document.getElementById('searchForm').addEventListener('submit', e=>{
+      e.preventDefault();
+      const from = document.getElementById('from').value.trim();
+      const to = document.getElementById('to').value.trim();
+      const date = document.getElementById('date').value;
+      const cls = document.getElementById('class').value;
+      if(!from||!to||!date){alert('Please fill from, to and date');return}
+      showResults({from,to,date,cls});
+    });
+
+    document.getElementById('randomFill').addEventListener('click', ()=>{
+      document.getElementById('from').value = ['Mumbai','Pune','Delhi','Bengaluru'][Math.floor(Math.random()*4)];
+      document.getElementById('to').value = ['Pune','Mumbai','Hyderabad','Chennai'][Math.floor(Math.random()*4)];
+      const d = new Date(); d.setDate(d.getDate()+Math.floor(Math.random()*30)+1);
+      document.getElementById('date').value = d.toISOString().slice(0,10);
+      document.getElementById('class').selectedIndex = Math.floor(Math.random()*4);
+      // auto-search
+      document.getElementById('searchForm').dispatchEvent(new Event('submit'));
+    });
+
+    function showResults({from,to,date,cls}){
+      resultsEl.innerHTML = '';
+      // simple filter shuffle: present the mock trains
+      mockTrains.forEach(tr=>{
+        const price = tr.priceBase + (cls.includes('AC')?120:0);
+        const item = document.createElement('div');
+        item.className = 'train-item';
+        item.innerHTML = `
+          <div class="train-meta">
+            <div style="min-width:84px">
+              <div style="font-weight:800">${tr.id}</div>
+              <div style="font-size:13px;color:var(--muted)">${tr.name}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-weight:700">${tr.depart}</div>
+              <div style="font-size:12px;color:var(--muted)">${tr.duration}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-weight:700">${tr.arrive}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="badge">₹${price}</div>
+            <div style="margin-top:8px">
+              <button class="primary" data-train='${JSON.stringify({...tr,price})}'>Book</button>
+            </div>
+          </div>
+        `;
+        resultsEl.appendChild(item);
+      });
+
+      // attach book handlers
+      resultsEl.querySelectorAll('button.primary').forEach(btn=>btn.addEventListener('click', onBookTrain));
+    }
+
+    function onBookTrain(e){
+      const tr = JSON.parse(e.currentTarget.dataset.train);
+      // show modal with selected seats summary
+      const title = document.getElementById('modalTitle');
+      const body = document.getElementById('modalBody');
+      title.textContent = `Book ${tr.id} — ${tr.name}`;
+      const selectedSeats = Array.from(selected);
+      if(selectedSeats.length===0){ alert('Please select at least one seat from the seat map'); return; }
+      let total = 0;
+      const rows = selectedSeats.map(id=>{
+        const s = seats.find(x=>x.id===id);
+        total += s.price + tr.price; // seat price + base fare per seat
+        return `<li>${id} — ₹${s.price + tr.price}</li>`;
+      });
+      body.innerHTML = `
+        <p><strong>From</strong>: ${document.getElementById('from').value} — <strong>To</strong>: ${document.getElementById('to').value}</p>
+        <p><strong>Date</strong>: ${document.getElementById('date').value} — <strong>Class</strong>: ${document.getElementById('class').value}</p>
+        <p><strong>Seats:</strong></p>
+        <ul>${rows.join('')}</ul>
+        <p style="margin-top:10px"><strong>Total payable:</strong> ₹${total}</p>
+      `;
+      document.getElementById('modal').style.display = 'flex';
+
+      // attach pay handler (one-time)
+      document.getElementById('payNow').onclick = ()=>{
+        finalizeBooking({train:tr,seats:selectedSeats,total});
+      };
+    }
+
+    document.getElementById('cancelModal').addEventListener('click', ()=>{document.getElementById('modal').style.display='none'});
+
+    function finalizeBooking({train,seats:seatIds,total}){
+      // mark seats as taken in demo
+      for(const id of seatIds){
+        const s = seats.find(x=>x.id===id);
+        if(s) s.taken = true;
+      }
+      // clear selected
+      selected.clear();
+      // rebuild seat map to reflect taken seats
+      renderSeatsFromState();
+      updateSummary();
+      // store booking to localStorage
+      const bookings = JSON.parse(localStorage.getItem('demo_bookings')||'[]');
+      bookings.push({id:Date.now(), train:train.id, name:train.name, from:document.getElementById('from').value, to:document.getElementById('to').value, date:document.getElementById('date').value, class:document.getElementById('class').value, seats:seatIds, total});
+      localStorage.setItem('demo_bookings', JSON.stringify(bookings));
+      document.getElementById('modal').style.display = 'none';
+      renderBookings();
+      alert('Payment simulated — booking saved locally!');
+    }
+
+    function renderSeatsFromState(){
+      // rebuild DOM seat map using seats state
+      seatMapEl.querySelectorAll('.seat').forEach(el=>el.remove());
+      seats.forEach(s=>{
+        const el = document.createElement('div');
+        el.className = 'seat' + (s.taken? ' taken':'');
+        el.textContent = s.id;
+        el.dataset.id = s.id;
+        el.title = s.taken ? 'Already booked' : `₹${s.price}`;
+        el.addEventListener('click', onSeatClicked);
+        if(selected.has(s.id)) el.classList.add('selected');
+        seatMapEl.appendChild(el);
+      });
+    }
+
+    function renderBookings(){
+      const bookings = JSON.parse(localStorage.getItem('demo_bookings')||'[]');
+      if(bookings.length===0){bookingsList.textContent='No bookings yet'; return}
+      bookingsList.innerHTML = '';
+      bookings.slice().reverse().forEach(b=>{
+        const d = document.createElement('div');
+        d.style.border='1px solid #eef2ff'; d.style.padding='10px'; d.style.borderRadius='8px'; d.style.marginBottom='8px';
+        d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${b.train}</strong> — ${b.name}<div style="font-size:13px;color:var(--muted)">${b.from} → ${b.to} • ${b.date} • ${b.class}</div></div><div><strong>₹${b.total}</strong></div></div><div style="margin-top:6px;color:var(--muted)">Seats: ${b.seats.join(', ')}</div>`;
+        bookingsList.appendChild(d);
+      });
+    }
+
+    // --- Initialization ---
+    buildSeatMap();
+    renderBookings();
+
+    // expose for debugging (dev/demo)
+    window._SwiftRail = {seats,selected,buildSeatMap,renderBookings};
+
+  </script></body>
+</html>
